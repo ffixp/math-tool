@@ -1,3 +1,4 @@
+from pathlib import Path
 from .models import LatexRenderCache
 from .serializers import LatexRenderCacheSerializer
 from rest_framework import viewsets
@@ -6,6 +7,7 @@ from rest_framework.response import Response
 import urllib.parse
 import matplotlib.pyplot as plt
 from matplotlib import rcParams
+from django.http import HttpResponse
 
 # Enable latex support in matplotlib
 rcParams['text.usetex'] = True
@@ -28,24 +30,30 @@ class RenderViewSet(viewsets.ModelViewSet):
         print(f"Got render request for expression: {expression}")
 
         # If the expression is already in the database, return it
-        try:
-            cache = LatexRenderCache.objects.get(expression=expression)
-            return Response(cache.svg, content_type='image/svg+xml')
-        except LatexRenderCache.DoesNotExist:
-            pass
+        if request.query_params.get('invalidate', None):
+            # Remove any cached results
+            LatexRenderCache.objects.filter(expression=expression).delete()            
+        else:
+            try:
+                cache = LatexRenderCache.objects.get(expression=expression)
+                return HttpResponse(cache.svg, content_type='image/svg+xml')
+            except LatexRenderCache.DoesNotExist:
+                pass
 
         # Use matplotlib to render the expression to SVG and save it to the database
+        plt.box(False)
         plt.text(0.0, 0.0, expression, fontsize=14)
         ax = plt.gca()
-        ax.axes.get_xaxis().set_visible(False)
-        ax.axes.get_yaxis().set_visible(False)
+        ax.set_axis_off()
         
         # Save the SVG to a string
-        svg = plt.savefig('/tmp/render.svg', format='svg')
+        plt.tight_layout()
+        plt.savefig('/tmp/render.svg', format='svg')
         
         # Save the SVG to the database
         cache = LatexRenderCache(expression=expression, svg=open('/tmp/render.svg', 'r').read())
+        Path('/tmp/render.svg').unlink()
         cache.save()
         
         # Return the SVG
-        return Response(svg, content_type='image/svg+xml')
+        return HttpResponse(cache.svg, content_type='image/svg+xml')
