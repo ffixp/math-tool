@@ -30,7 +30,7 @@ class RenderViewSet(viewsets.ModelViewSet):
         # If the expression is already in the database, return it
         try:
             cache = LatexRenderCache.objects.get(expression=expression)
-            return Response(cache.svg)
+            return Response(cache.svg, content_type='image/svg+xml')
         except LatexRenderCache.DoesNotExist:
             pass
 
@@ -41,11 +41,11 @@ class RenderViewSet(viewsets.ModelViewSet):
         ax.axes.get_yaxis().set_visible(False)
         
         # Save the SVG to a string
-        svg = plt.savefig('temp.svg', format='svg')
+        svg = plt.savefig('/tmp/render.svg', format='svg')
         
         # Save the SVG to the database
-        cache = LatexRenderCache(expression=expression, svg=svg)
+        cache = LatexRenderCache(expression=expression, svg=open('/tmp/render.svg', 'r').read())
         cache.save()
         
         # Return the SVG
-        return Response(svg)
+        return Response(svg, content_type='image/svg+xml')
